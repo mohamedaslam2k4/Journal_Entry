@@ -9,7 +9,6 @@ import os
 st.set_page_config(page_title="AI Categorized Journal", layout="wide")
 
 # --- Environment Configuration ---
-# Streamlit will look for this key inside your Advanced Settings -> Secrets panel
 api_key = os.environ.get("GEMINI_API_KEY") or st.secrets.get("GEMINI_API_KEY")
 
 if not api_key:
@@ -26,7 +25,7 @@ class AIAnalysis(BaseModel):
     summary: str = Field(description="A clean, single-sentence summary of the user's thoughts")
     tags: list[str] = Field(description="3 to 5 lowercase topic keywords extracted from the text")
 
-# Initialize an online session memory runtime to handle multi-category CRUD state logs
+# Initialize session memory state logs
 if "journal_db" not in st.session_state:
     st.session_state.journal_db = []
 
@@ -56,7 +55,6 @@ with tab_create:
         else:
             with st.spinner("Invoking Gemini semantic analysis engines..."):
                 try:
-                    # Request strict JSON structured analysis from Gemini 1.5 Flash
                     completion = client.models.generate_content(
                         model='gemini-1.5-flash',
                         contents=user_input,
@@ -67,9 +65,7 @@ with tab_create:
                         ),
                     )
                     
-                    # Parse output string back to JSON dictionary matching Pydantic fields
                     ai_insights = json.loads(completion.text)
-                    
                     unique_id = datetime.utcnow().strftime("%Y%m%d%H%M%S%f")
                     
                     document = {
@@ -128,87 +124,59 @@ with tab_update:
         selected_log_title = st.selectbox("Select entry index target to manipulate:", list(log_options.keys()))
         selected_id = log_options[selected_log_title]
         
-        target_index = next(i for i, entry in enumerate(st.session_state.journal_db) if entry['id'] == selected_id)
-        target_log = st.session_state.journal_db[target_index]
+        target_index = next((i for i, entry in enumerate(st.session_state.journal_db) if entry['id'] == selected_id), None)
         
-        st.markdown("### Update Configurations")
-        update_mode = st.radio("Choose Update Behavior Mode:", ["Append context note to this entry", "Overwrite / Rewrite entry completely"])
-        
-        # Clean the prefix tag when loading text to update
-        clean_text = target_log["raw_entry"].split("] - ", 1)[-1] if "] - " in target_log["raw_entry"] else target_log["raw_entry"]
-        new_text_input = st.text_area("Input context string data payload:", value=clean_text, height=100)
-        
-        col_up, col_del = st.columns(2)
-        
-        # 1. Update Core Execution
-        if col_up.button("✏️ Execute Analytics Update", use_container_width=True):
-            if not new_text_input.strip():
-                st.error("Input text cannot be blank during updates.")
-            else:
-                with st.spinner("Gemini is re-indexing modified data schemas..."):
-                    try:
-                        timestamp = datetime.utcnow().strftime('%H:%M')
-                        
-                        if "Append" in update_mode:
-                            updated_raw = target_log["raw_entry"] + f"\n[{timestamp}] (Updated Component) - {new_text_input}"
-                        else:
-                            updated_raw = f"[{timestamp}] - {new_text_input}"
+        if target_index is not None:
+            target_log = st.session_state.journal_db[target_index]
+            
+            st.markdown("### Update Configurations")
+            update_mode = st.radio("Choose Update Behavior Mode:", ["Append context note to this entry", "Overwrite / Rewrite entry completely"])
+            
+            clean_text = target_log["raw_entry"].split("] - ", 1)[-1] if "] - " in target_log["raw_entry"] else target_log["raw_entry"]
+            new_text_input = st.text_area("Input context string data payload:", value=clean_text, height=100, key=f"update_text_{selected_id}")
+            
+            col_up, col_del = st.columns(2)
+            
+            # 1. Update Core Execution
+            if col_up.button("✏️ Execute Analytics Update", use_container_width=True):
+                if not new_text_input.strip():
+                    st.error("Input text cannot be blank during updates.")
+                else:
+                    with st.spinner("Gemini is re-indexing modified data schemas..."):
+                        try:
+                            timestamp = datetime.utcnow().strftime('%H:%M')
                             
-                        # Re-run Gemini on modified entry string
-                        completion = client.models.generate_content(
-                            model='gemini-1.5-flash',
-                            contents=updated_raw,
-                            config=types.GenerateContentConfig(
-                                response_mime_type="application/json",
-                                response_schema=AIAnalysis,
-                                system_instruction="You are a professional behavioral analytics engine. Analyze the provided journal text to extract emotional trends and summaries accurately."
-                            ),
-                        )
-                        new_insights = json.loads(completion.text)
-                        
-                        st.session_state.journal_db[target_index]["raw_entry"] = updated_raw
-                        st.session_state.journal_db[target_index]["ai_analysis"] = new_insights
-                        
-                        st.success("Log updated and tracking analytics metadata updated successfully!")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Processing structural updates failed: {e}")
-                        
-        # 2. Delete Execution
-        if col_del.button("🗑️ Delete Selected Log Permanently", use_container_width=True):
-            st.session_state.journal_db.pop(target_index)
-            st.success("Target item dropped from database arrays.")
-            st.rerun()
+                            if "Append" in update_mode:
+                                updated_raw = target_log["raw_entry"] + f"\n[{timestamp}] (Updated Component) - {new_text_input}"
+                            else:
+                                updated_raw = f"[{timestamp}] - {new_text_input}"
+                                
+                            completion = client.models.generate_content(
+                                model='gemini-1.5-flash',
+                                contents=updated_raw,
+                                config=types.GenerateContentConfig(
+                                    response_mime_type="application/json",
+                                    response_schema=AIAnalysis,
+                                    system_instruction="You are a professional behavioral analytics engine. Analyze the provided journal text to extract emotional trends and summaries accurately."
+                                ),
+                            )
+                            new_insights = json.loads(completion.text)
+                            
+                            st.session_state.journal_db[target_index]["raw_entry"] = updated_raw
+                            st.session_state.journal_db[target_index]["ai_analysis"] = new_insights
+                            
+                            st.success("Log updated successfully!")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Processing structural updates failed: {e}")
+                            
+            # 2. Delete Execution
+            if col_del.button("🗑️ Delete Selected Log Permanently", use_container_width=True):
+                st.session_state.journal_db.pop(target_index)
+                st.success("Target item dropped successfully.")
+                st.rerun()
 
 
 # --- TAB 4: REFLECTIVE CHAT FRAMEWORK ---
 with tab_chat:
-    st.subheader("Contextual Reflection Engine")
-    chat_prompt = st.text_input("Express what's on your mind right now or ask questions regarding your patterns:")
-    
-    if st.button("Consult AI Coach") and chat_prompt.strip():
-        with st.spinner("Analyzing log tracking trends..."):
-            
-            past_logs = st.session_state.journal_db[:5]
-            history_context = ""
-            for entry in reversed(past_logs):
-                history_context += f"Category: {entry['category'].upper()} | Mood Profile: {entry['ai_analysis']['mood']}\nContent: {entry['raw_entry']}\n\n"
-                
-            system_prompt = (
-                "You are an empathetic, highly reflective AI journal companion. Your function is to offer encouraging, "
-                "insightful, and highly contextual feedback on the user's message using their recent categorised history context.\n\n"
-                f"User's Recent Categorized Journal Entries:\n{history_context}"
-            )
-            
-            try:
-                # Dispatch conversational payload directly into Gemini Flash
-                response = client.models.generate_content(
-                    model='gemini-1.5-flash',
-                    contents=chat_prompt,
-                    config=types.GenerateContentConfig(
-                        system_instruction=system_prompt
-                    )
-                )
-                st.markdown(f"**AI Reflection Coach:**\n\n{response.text}")
-            except Exception as e:
-                st.error(f"Error compiling response loops: {e}")
+    st.subheader("Context
