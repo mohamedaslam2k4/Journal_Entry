@@ -19,7 +19,7 @@ if not api_key:
 client = genai.Client(api_key=api_key)
 
 # Using the optimized, high-throughput free-tier lite model
-TARGET_MODEL = 'gemini-2.5-flash-lite'
+TARGET_MODEL = 'gemini-2.5-flash'
 
 # --- 1. Structured AI Schema Definition ---
 class AIAnalysis(BaseModel):
