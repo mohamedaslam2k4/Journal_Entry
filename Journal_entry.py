@@ -18,6 +18,9 @@ if not api_key:
 # Initialize the Native Google GenAI Client
 client = genai.Client(api_key=api_key)
 
+# Using the optimized, high-throughput free-tier lite model
+TARGET_MODEL = 'gemini-2.5-flash-lite'
+
 # --- 1. Structured AI Schema Definition ---
 class AIAnalysis(BaseModel):
     mood: str = Field(description="The primary emotion of the text (e.g., Anxious, Motivated, Content, Exhausted)")
@@ -55,9 +58,8 @@ with tab_create:
         else:
             with st.spinner("Invoking Gemini semantic analysis engines..."):
                 try:
-                    # Request strict JSON structured analysis using the Lite model
                     completion = client.models.generate_content(
-                        model='gemini-2.5-flash-lite',  # <--- Switched to Lite Model
+                        model=TARGET_MODEL,
                         contents=user_input,
                         config=types.GenerateContentConfig(
                             response_mime_type="application/json",
@@ -153,7 +155,7 @@ with tab_update:
                                 updated_raw = f"[{timestamp}] - {new_text_input}"
                                 
                             completion = client.models.generate_content(
-                                model='gemini-2.5-flash-lite',  # <--- Switched to Lite Model
+                                model=TARGET_MODEL,
                                 contents=updated_raw,
                                 config=types.GenerateContentConfig(
                                     response_mime_type="application/json",
@@ -202,7 +204,7 @@ with tab_chat:
                     )
                     
                     response = client.models.generate_content(
-                        model='gemini-2.5-flash-lite',  # <--- Switched to Lite Model
+                        model=TARGET_MODEL,
                         contents=chat_prompt,
                         config=types.GenerateContentConfig(
                             system_instruction=system_prompt
